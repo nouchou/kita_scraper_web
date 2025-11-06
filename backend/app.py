@@ -6,8 +6,32 @@ import time
 from scraper import KitaScraper
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Update CORS configuration
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
+
+# Add CSP middleware
+@app.after_request
+def add_security_headers(response):
+    response.headers['Content-Security-Policy'] = "default-src 'self'; \
+        connect-src 'self' ws://localhost:5000 wss://localhost:5000; \
+        script-src 'self' 'unsafe-inline' 'unsafe-eval'; \
+        style-src 'self' 'unsafe-inline';"
+    return response
+
+# Update SocketIO configuration
+socketio = SocketIO(app,
+    cors_allowed_origins=["http://localhost:3000"],
+    ping_timeout=60,
+    ping_interval=25,
+    async_mode='threading'
+)
 
 # État global du scraping
 scraping_state = {
@@ -32,7 +56,13 @@ def start_scraping():
     
     data = request.json
     states = data.get('states', [])
-    settings = data.get('settings', {})
+    settings = data.get('settings', {
+        'delay': 500,
+        'maxRetries': 3,
+        'timeout': 30000,
+        'extract_details': True,  # Toujours extraire les détails de contact
+        'extract_contacts': True  # Nouveau paramètre pour les contacts
+    })
     
     # Ajouter le paramètre extract_details (par défaut False pour plus de rapidité)
     if 'extract_details' not in settings:
